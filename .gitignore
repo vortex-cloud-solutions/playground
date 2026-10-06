@@ -1,0 +1,15 @@
+# Go
+/playground
+/ingest
+*.test
+coverage.*
+
+# Web
+node_modules/
+web/dist/
+
+# Local
+.env
+.env.*
+!.env.example
+.DS_Store
