@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -93,5 +94,38 @@ func TestHelloOnARealServer(t *testing.T) {
 	status, hdr, body = fetch("/api/hello/greeting/99999999999")
 	if status != 400 || hdr.Get("Cache-Control") != "no-store" || !strings.Contains(body, `"code":"bad_param"`) {
 		t.Errorf("greeting/99999999999 = %d %q %s, want 400 bad_param no-store", status, hdr.Get("Cache-Control"), body)
+	}
+
+	// A server that refuses the connection with a class 22 SQLSTATE is a
+	// misconfiguration, not the visitor's bad parameter: statement_timeout=foo
+	// in the DSN makes Postgres answer 22023 (invalid_parameter_value) during
+	// connection setup, and pgx hands that PgError back inside a ConnectError.
+	// A unit test cannot build that wrapper (its err field is unexported), so
+	// it takes a real server.
+	u, err := url.Parse(pg.APIDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	q.Set("statement_timeout", "foo")
+	u.RawQuery = q.Encode()
+	misconfigured, err := db.Open(context.Background(), u.String(), "playground_ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer misconfigured.Close()
+	bad := httptest.NewServer(server.New(reg, misconfigured))
+	defer bad.Close()
+	resp, err := http.Get(bad.URL + "/api/hello/greetings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 503 || resp.Header.Get("Cache-Control") != "no-store" || !strings.Contains(string(raw), `"code":"unavailable"`) {
+		t.Errorf("greetings on a misconfigured server = %d %q %s, want 503 unavailable no-store", resp.StatusCode, resp.Header.Get("Cache-Control"), raw)
 	}
 }

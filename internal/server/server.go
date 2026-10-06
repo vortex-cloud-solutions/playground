@@ -248,8 +248,15 @@ func (s *server) run(ctx context.Context, w http.ResponseWriter, r *http.Request
 // classify maps a query failure to what the client sees: SQLSTATE 57014
 // (statement_timeout) is a timeout, class 22 (data exception: a parameter
 // Postgres could not take, such as an int4 overflow) is a bad parameter,
-// and anything else is the database being unavailable.
+// and anything else is the database being unavailable. A failure to connect
+// is always unavailable: pgx returns the ConnectError from Acquire unchanged,
+// and it unwraps to the server's PgError, so a server that refuses a runtime
+// parameter in the DSN (SQLSTATE 22023) would otherwise read as class 22.
 func classify(err error) *apiError {
+	var connErr *pgconn.ConnectError
+	if errors.As(err, &connErr) {
+		return &apiError{http.StatusServiceUnavailable, "unavailable", "the database is unavailable"}
+	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch {
