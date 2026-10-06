@@ -65,6 +65,12 @@ func TestParseHeader(t *testing.T) {
 			wantSQL: "SELECT 1",
 		},
 		{
+			name:    "live-only tiles needs no domain",
+			src:     "-- layout: tiles\n-- max-age: 60\n-- live-only: true\nSELECT 1",
+			want:    query.Header{Params: tiles, Layout: query.LayoutTiles, MaxAge: 60, LiveOnly: true},
+			wantSQL: "SELECT 1",
+		},
+		{
 			name:    "CRLF line endings",
 			src:     "-- params:\r\n-- layout: columns\r\n-- max-age: 5\r\nSELECT 1\r\n",
 			want:    query.Header{Params: []query.Param{}, Layout: query.LayoutColumns, MaxAge: 5},
@@ -94,6 +100,8 @@ func TestParseHeader(t *testing.T) {
 		{name: "live-only not a bool", src: "-- params:\n-- layout: columns\n-- max-age: 5\n-- live-only: yes\nSELECT 1", wantErr: `live-only "yes": want true or false`},
 		{name: "params without domain", src: "-- params: id:int\n-- layout: columns\n-- max-age: 5\nSELECT 1", wantErr: "domain is required unless live-only: true"},
 		{name: "domain on a query without params", src: "-- params:\n-- domain: SELECT 1\n-- layout: columns\n-- max-age: 5\nSELECT 1", wantErr: "domain must be empty on a query without params"},
+		{name: "domain on a live-only query without params", src: "-- params:\n-- domain: SELECT 1\n-- layout: columns\n-- max-age: 5\n-- live-only: true\nSELECT 1", wantErr: "domain must be empty on a query without params"},
+		{name: "live-only tiles with a junk domain", src: "-- layout: tiles\n-- domain: junk\n-- max-age: 5\n-- live-only: true\nSELECT 1", wantErr: "a tiles query wants"},
 		{name: "frozen-fallback on a query that is not live-only", src: "-- params:\n-- layout: columns\n-- max-age: 5\n-- frozen-fallback: other\nSELECT 1", wantErr: "frozen-fallback is only allowed on a live-only query"},
 		{name: "frozen-fallback with live-only false", src: "-- params:\n-- layout: columns\n-- max-age: 5\n-- live-only: false\n-- frozen-fallback: other\nSELECT 1", wantErr: "frozen-fallback is only allowed on a live-only query"},
 		{name: "frozen-fallback not a query name", src: "-- params: q:text\n-- layout: columns\n-- max-age: 5\n-- live-only: true\n-- frozen-fallback: Other.sql\nSELECT 1", wantErr: `frozen-fallback "Other.sql" is not a query name`},

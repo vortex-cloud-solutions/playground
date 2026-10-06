@@ -147,19 +147,16 @@ func buildHeader(raw map[string]string) (Header, error) {
 	}
 
 	h.Domain = raw["domain"]
-	if !h.LiveOnly {
-		switch {
-		case h.Layout == LayoutTiles:
-			if err := checkTileDomain(h.Domain); err != nil {
-				return Header{}, err
-			}
-		case len(h.Params) == 0:
-			if h.Domain != "" {
-				return Header{}, errors.New("domain must be empty on a query without params: it has exactly one answer")
-			}
-		case h.Domain == "":
-			return Header{}, errors.New("domain is required unless live-only: true")
+	// A tiles query always carries z, x, y, so the first case never matches it.
+	switch {
+	case len(h.Params) == 0 && h.Domain != "":
+		return Header{}, errors.New("domain must be empty on a query without params: it has exactly one answer")
+	case h.Layout == LayoutTiles && (!h.LiveOnly || h.Domain != ""):
+		if err := checkTileDomain(h.Domain); err != nil {
+			return Header{}, err
 		}
+	case !h.LiveOnly && len(h.Params) > 0 && h.Domain == "":
+		return Header{}, errors.New("domain is required unless live-only: true")
 	}
 
 	h.FrozenFallback = raw["frozen-fallback"]
